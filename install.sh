@@ -43,6 +43,22 @@ is_sprite() {
     [ -S "/.sprite/api.sock" ]
 }
 
+# Install dependencies
+install_deps() {
+    if ! command -v jq &> /dev/null; then
+        info "Installing jq..."
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq jq
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y -q jq
+        elif command -v brew &> /dev/null; then
+            brew install jq
+        else
+            warn "Could not install jq automatically"
+        fi
+    fi
+}
+
 # Install Tailscale if not present
 install_tailscale() {
     if command -v tailscale &> /dev/null; then
@@ -202,6 +218,7 @@ main() {
     echo ""
 
     detect_platform
+    install_deps
     install_tailscale
     start_tailscaled
     auth_tailscale
