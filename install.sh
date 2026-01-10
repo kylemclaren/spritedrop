@@ -80,23 +80,14 @@ start_tailscaled() {
 
     if is_sprite; then
         info "Sprite environment detected..."
-        if ! sprite-env services get tailscaled &> /dev/null; then
-            info "Creating tailscaled service..."
-            sprite-env services create tailscaled \
-                --cmd /usr/sbin/tailscaled \
-                --args "--state=/var/lib/tailscale/tailscaled.state,--socket=/var/run/tailscale/tailscaled.sock" \
-                --no-stream
-            info "tailscaled service created"
-        else
-            info "tailscaled service exists, ensuring it's running..."
-            # Delete and recreate to ensure it starts
-            sprite-env services delete tailscaled 2>/dev/null || true
-            sleep 1
-            sprite-env services create tailscaled \
-                --cmd /usr/sbin/tailscaled \
-                --args "--state=/var/lib/tailscale/tailscaled.state,--socket=/var/run/tailscale/tailscaled.sock" \
-                --no-stream
-        fi
+        # Remove existing service if any (suppress all output)
+        sprite-env services delete tailscaled > /dev/null 2>&1 || true
+        sleep 1
+        info "Creating tailscaled service..."
+        sprite-env services create tailscaled \
+            --cmd /usr/sbin/tailscaled \
+            --args "--state=/var/lib/tailscale/tailscaled.state,--socket=/var/run/tailscale/tailscaled.sock" \
+            --no-stream
         # Wait for tailscaled to be ready
         info "Waiting for tailscaled to start..."
         for i in {1..10}; do
@@ -170,18 +161,15 @@ create_recv_dir() {
 setup_service() {
     if is_sprite; then
         info "Setting up spritedrop as Sprite service..."
-        if ! sprite-env services get spritedrop &> /dev/null; then
-            sprite-env services create spritedrop \
-                --cmd "$INSTALL_DIR/spritedrop" \
-                --args "--dir=$RECV_DIR" \
-                --needs tailscaled \
-                --no-stream
-            info "spritedrop service created"
-        else
-            info "spritedrop service already exists, restarting..."
-            sprite-env services signal spritedrop TERM 2>/dev/null || true
-            sleep 1
-        fi
+        # Remove existing service if any (suppress all output)
+        sprite-env services delete spritedrop > /dev/null 2>&1 || true
+        sleep 1
+        sprite-env services create spritedrop \
+            --cmd "$INSTALL_DIR/spritedrop" \
+            --args "--dir=$RECV_DIR" \
+            --needs tailscaled \
+            --no-stream
+        info "spritedrop service created"
     elif command -v systemctl &> /dev/null; then
         info "Setting up systemd service..."
         sudo tee /etc/systemd/system/spritedrop.service > /dev/null <<EOF
