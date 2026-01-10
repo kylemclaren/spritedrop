@@ -9,15 +9,50 @@ INSTALL_DIR="/usr/local/bin"
 RECV_DIR="${SPRITEDROP_DIR:-$HOME/incoming}"
 TS_HOSTNAME="${SPRITEDROP_HOSTNAME:-}"
 
-# Colors
+# Colors and formatting
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
 
-info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+# Status indicators
+CHECK="${GREEN}✓${NC}"
+CROSS="${RED}✗${NC}"
+ARROW="${BLUE}→${NC}"
+
+info()    { echo -e "  ${CHECK} $1"; }
+warn()    { echo -e "  ${YELLOW}!${NC} $1"; }
+error()   { echo -e "  ${CROSS} $1"; exit 1; }
+step()    { echo -e "\n${BOLD}$1${NC}"; }
+substep() { echo -e "  ${ARROW} $1"; }
+
+# Spinner for long operations
+spin() {
+    local pid=$1
+    local msg=$2
+    local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    while kill -0 "$pid" 2>/dev/null; do
+        for (( i=0; i<${#spinstr}; i++ )); do
+            printf "\r  ${BLUE}%s${NC} %s" "${spinstr:$i:1}" "$msg"
+            sleep 0.1
+        done
+    done
+    printf "\r"
+}
+
+# Run command silently with spinner
+run_silent() {
+    local msg="$1"
+    shift
+    "$@" > /dev/null 2>&1 &
+    local pid=$!
+    spin $pid "$msg"
+    wait $pid
+    return $?
+}
 
 # Detect OS and architecture
 detect_platform() {
@@ -36,7 +71,6 @@ detect_platform() {
     esac
 
     PLATFORM="${OS}-${ARCH}"
-    info "Detected platform: $PLATFORM"
 }
 
 # Check if running in Sprite environment
@@ -47,15 +81,14 @@ is_sprite() {
 # Install dependencies
 install_deps() {
     if ! command -v jq &> /dev/null; then
-        info "Installing jq..."
+        substep "Installing jq..."
         if command -v apt-get &> /dev/null; then
-            sudo apt-get update -qq && sudo apt-get install -y -qq jq
+            sudo apt-get update -qq > /dev/null 2>&1
+            sudo apt-get install -y -qq jq > /dev/null 2>&1
         elif command -v yum &> /dev/null; then
-            sudo yum install -y -q jq
+            sudo yum install -y -q jq > /dev/null 2>&1
         elif command -v brew &> /dev/null; then
-            brew install jq
-        else
-            warn "Could not install jq automatically"
+            brew install jq > /dev/null 2>&1
         fi
     fi
 }
@@ -63,129 +96,142 @@ install_deps() {
 # Install Tailscale if not present
 install_tailscale() {
     if command -v tailscale &> /dev/null; then
-        info "Tailscale already installed: $(tailscale version | head -1)"
+        info "Tailscale $(tailscale version | head -1) installed"
         return 0
     fi
 
-    info "Installing Tailscale..."
-    curl -fsSL https://tailscale.com/install.sh | sh
-    info "Tailscale installed successfully"
+    substep "Installing Tailscale..."
+    curl -fsSL https://tailscale.com/install.sh 2>/dev/null | sh > /dev/null 2>&1
+    info "Tailscale installed"
 }
 
 # Start tailscaled daemon
 start_tailscaled() {
     if pgrep -x tailscaled > /dev/null; then
-        info "tailscaled already running"
+        info "tailscaled running"
         return 0
     fi
 
     if is_sprite; then
-        info "Sprite environment detected..."
-        # Remove existing service if any (suppress all output)
+        substep "Creating tailscaled service..."
         sprite-env services delete tailscaled > /dev/null 2>&1 || true
         sleep 1
-        info "Creating tailscaled service..."
         sprite-env services create tailscaled \
             --cmd /usr/sbin/tailscaled \
             --args "--state=/var/lib/tailscale/tailscaled.state,--socket=/var/run/tailscale/tailscaled.sock" \
-            --no-stream
-        # Wait for tailscaled to be ready
-        info "Waiting for tailscaled to start..."
+            --no-stream > /dev/null 2>&1
+
+        # Wait for tailscaled
         for i in {1..10}; do
-            if pgrep -x tailscaled > /dev/null; then
-                break
-            fi
+            if pgrep -x tailscaled > /dev/null; then break; fi
             sleep 1
         done
+        info "tailscaled service created"
     elif command -v systemctl &> /dev/null; then
-        info "Starting tailscaled via systemd..."
-        sudo systemctl enable --now tailscaled
+        substep "Starting tailscaled..."
+        sudo systemctl enable --now tailscaled > /dev/null 2>&1
+        info "tailscaled started"
     else
-        info "Starting tailscaled manually..."
-        sudo tailscaled --state=/var/lib/tailscale/tailscaled.state &
+        substep "Starting tailscaled..."
+        sudo tailscaled --state=/var/lib/tailscale/tailscaled.state > /dev/null 2>&1 &
         sleep 2
+        info "tailscaled started"
+    fi
+}
+
+# Prompt for hostname
+prompt_hostname() {
+    # Skip if already set via env var
+    [ -n "$TS_HOSTNAME" ] && return 0
+
+    # Skip if already authenticated
+    tailscale status > /dev/null 2>&1 && return 0
+
+    echo ""
+    echo -e "  ${DIM}Enter a hostname for this device in your tailnet${NC}"
+    echo -e "  ${DIM}(e.g., sprite-myproject, sprite-api)${NC}"
+    echo ""
+    read -p "  Hostname [Enter to auto-generate]: " input_hostname
+
+    if [ -n "$input_hostname" ]; then
+        TS_HOSTNAME="$input_hostname"
     fi
 }
 
 # Authenticate Tailscale
 auth_tailscale() {
-    if tailscale status &> /dev/null 2>&1; then
-        info "Tailscale already authenticated"
-        # Update hostname if specified
-        if [ -n "$TS_HOSTNAME" ]; then
-            info "Setting hostname to: $TS_HOSTNAME"
-            sudo tailscale set --hostname="$TS_HOSTNAME"
+    if tailscale status > /dev/null 2>&1; then
+        local current_name=$(tailscale status --json 2>/dev/null | jq -r '.Self.HostName // empty' 2>/dev/null)
+        if [ -n "$TS_HOSTNAME" ] && [ "$current_name" != "$TS_HOSTNAME" ]; then
+            substep "Updating hostname to $TS_HOSTNAME..."
+            sudo tailscale set --hostname="$TS_HOSTNAME" > /dev/null 2>&1
         fi
+        info "Tailscale authenticated as ${BOLD}${current_name:-$(hostname)}${NC}"
         return 0
     fi
 
-    info "Authenticating Tailscale..."
     echo ""
-    warn "Please authenticate in your browser when prompted"
+    echo -e "  ${YELLOW}▶${NC} ${BOLD}Authenticate in your browser${NC}"
     echo ""
+
     if [ -n "$TS_HOSTNAME" ]; then
-        info "Setting hostname to: $TS_HOSTNAME"
-        sudo tailscale up --hostname="$TS_HOSTNAME"
+        sudo tailscale up --hostname="$TS_HOSTNAME" 2>&1 | grep -E "https://|Success" || true
     else
-        sudo tailscale up
+        sudo tailscale up 2>&1 | grep -E "https://|Success" || true
     fi
-    info "Tailscale authenticated successfully"
+
+    local final_name=$(tailscale status --json 2>/dev/null | jq -r '.Self.HostName // empty' 2>/dev/null)
+    echo ""
+    info "Authenticated as ${BOLD}${final_name:-$(hostname)}${NC}"
 }
 
-# Set Tailscale operator for non-root file access
+# Set Tailscale operator
 set_operator() {
-    info "Setting Tailscale operator to current user..."
-    sudo tailscale set --operator="$USER" 2>/dev/null || true
+    sudo tailscale set --operator="$USER" > /dev/null 2>&1 || true
 }
 
 # Get latest release version
 get_latest_version() {
-    curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | \
+    curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | \
         grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
 }
 
 # Download and install spritedrop
-install_taildrop_recv() {
+install_spritedrop() {
     VERSION=$(get_latest_version)
-    if [ -z "$VERSION" ]; then
-        error "Failed to get latest version. Check https://github.com/${REPO}/releases"
-    fi
+    [ -z "$VERSION" ] && error "Failed to get latest version"
 
-    info "Installing spritedrop $VERSION..."
+    substep "Downloading spritedrop ${VERSION}..."
+    curl -fsSL "https://github.com/${REPO}/releases/download/${VERSION}/spritedrop-${PLATFORM}" \
+        -o /tmp/spritedrop 2>/dev/null || error "Failed to download"
 
-    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/spritedrop-${PLATFORM}"
-
-    curl -fsSL "$DOWNLOAD_URL" -o /tmp/spritedrop || error "Failed to download binary"
     chmod +x /tmp/spritedrop
     sudo mv /tmp/spritedrop "$INSTALL_DIR/spritedrop"
-
-    info "Installed to $INSTALL_DIR/spritedrop"
+    info "Installed spritedrop ${VERSION}"
 }
 
 # Create receiving directory
 create_recv_dir() {
     mkdir -p "$RECV_DIR"
-    info "Files will be saved to: $RECV_DIR"
 }
 
 # Set up as a service
 setup_service() {
     if is_sprite; then
-        info "Setting up spritedrop as Sprite service..."
-        # Remove existing service if any (suppress all output)
+        substep "Creating spritedrop service..."
         sprite-env services delete spritedrop > /dev/null 2>&1 || true
         sleep 1
         sprite-env services create spritedrop \
             --cmd "$INSTALL_DIR/spritedrop" \
             --args "--dir=$RECV_DIR" \
             --needs tailscaled \
-            --no-stream
-        info "spritedrop service created"
+            --no-stream > /dev/null 2>&1
+        info "spritedrop service running"
     elif command -v systemctl &> /dev/null; then
-        info "Setting up systemd service..."
+        substep "Creating systemd service..."
         sudo tee /etc/systemd/system/spritedrop.service > /dev/null <<EOF
 [Unit]
-Description=Taildrop file receiver
+Description=Spritedrop file receiver
 After=tailscaled.service
 Requires=tailscaled.service
 
@@ -199,42 +245,50 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
-        sudo systemctl daemon-reload
-        sudo systemctl enable --now spritedrop
-        info "systemd service created and started"
+        sudo systemctl daemon-reload > /dev/null 2>&1
+        sudo systemctl enable --now spritedrop > /dev/null 2>&1
+        info "systemd service running"
     else
-        warn "No service manager detected. Run manually:"
-        echo "  $INSTALL_DIR/spritedrop --dir=$RECV_DIR"
+        warn "No service manager - run manually:"
+        echo "    $INSTALL_DIR/spritedrop --dir=$RECV_DIR"
     fi
 }
 
-# Main installation
+# Main
 main() {
     echo ""
-    echo "=================================="
-    echo "  spritedrop installer"
-    echo "=================================="
+    echo -e "${BOLD}  spritedrop${NC} ${DIM}installer${NC}"
     echo ""
 
+    step "Setting up environment"
     detect_platform
+    info "Platform: ${PLATFORM}"
     install_deps
+
+    step "Installing Tailscale"
     install_tailscale
     start_tailscaled
+
+    step "Configuring Tailscale"
+    prompt_hostname
     auth_tailscale
     set_operator
-    install_taildrop_recv
+
+    step "Installing spritedrop"
+    install_spritedrop
     create_recv_dir
     setup_service
 
+    # Get final hostname for display
+    local device_name=$(tailscale status --json 2>/dev/null | jq -r '.Self.HostName // empty' 2>/dev/null)
+    device_name="${device_name:-$(hostname)}"
+
     echo ""
-    echo "=================================="
-    info "Installation complete!"
-    echo "=================================="
+    echo -e "${BOLD}  Done!${NC} Send files with:"
     echo ""
-    echo "Send files from another device:"
-    echo "  tailscale file cp <file> $(hostname):"
+    echo -e "    ${DIM}tailscale file cp${NC} ${BOLD}<file>${NC} ${DIM}${device_name}:${NC}"
     echo ""
-    echo "Files will be saved to: $RECV_DIR"
+    echo -e "  ${DIM}Files saved to:${NC} ${RECV_DIR}"
     echo ""
 }
 
