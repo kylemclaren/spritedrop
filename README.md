@@ -1,6 +1,6 @@
 # spritedrop
 
-A persistent [Taildrop](https://tailscale.com/kb/1106/taildrop) file receiver for Linux servers and [Sprite](https://sprites.dev) environments.
+A persistent [Taildrop](https://tailscale.com/kb/1106/taildrop) file receiver for [Sprites](https://sprites.dev) environments.
 
 ## Features
 
