@@ -12,14 +12,15 @@ A persistent [Taildrop](https://tailscale.com/kb/1106/taildrop) file receiver fo
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kylemclaren/spritedrop/main/install.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/kylemclaren/spritedrop/main/install.sh)
 ```
 
 The installer will:
 1. Install Tailscale (if not present)
-2. Start and authenticate Tailscale
-3. Download the latest spritedrop binary
-4. Set up spritedrop as a persistent service
+2. Prompt for a device hostname (or generate a unique one)
+3. Authenticate Tailscale
+4. Download the latest spritedrop binary
+5. Set up spritedrop as a persistent service
 
 ## Usage
 
@@ -40,14 +41,14 @@ Files are saved to `~/incoming` by default.
 Set environment variables before the install command:
 
 ```bash
+# Custom Tailscale hostname (skip interactive prompt)
+SPRITEDROP_HOSTNAME=sprite-myproject bash <(curl -fsSL ...)
+
 # Custom file directory
-SPRITEDROP_DIR=/path/to/dir
+SPRITEDROP_DIR=/data/incoming bash <(curl -fsSL ...)
 
-# Custom Tailscale hostname (useful for multiple Sprites)
-SPRITEDROP_HOSTNAME=sprite-myproject
-
-# Example with both
-SPRITEDROP_HOSTNAME=sprite-api SPRITEDROP_DIR=/data/incoming curl -fsSL ... | bash
+# Both options
+SPRITEDROP_HOSTNAME=sprite-api SPRITEDROP_DIR=/data/incoming bash <(curl -fsSL ...)
 ```
 
 ## Manual Installation

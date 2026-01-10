@@ -139,7 +139,12 @@ start_tailscaled() {
     fi
 }
 
-# Prompt for hostname
+# Generate random hostname
+generate_hostname() {
+    echo "sprite-$(tr -dc 'a-z0-9' < /dev/urandom | head -c 6)"
+}
+
+# Prompt for hostname or generate one
 prompt_hostname() {
     # Skip if already set via env var
     [ -n "$TS_HOSTNAME" ] && return 0
@@ -147,7 +152,7 @@ prompt_hostname() {
     # Skip if already authenticated
     tailscale status > /dev/null 2>&1 && return 0
 
-    # Only prompt if running interactively (not piped)
+    # Prompt if running interactively (not piped)
     if [ -t 0 ]; then
         echo ""
         echo -e "  ${DIM}Enter a hostname for this device in your tailnet${NC}"
@@ -157,8 +162,15 @@ prompt_hostname() {
 
         if [ -n "$input_hostname" ]; then
             TS_HOSTNAME="$input_hostname"
+        else
+            TS_HOSTNAME=$(generate_hostname)
         fi
+    else
+        # Non-interactive: generate random hostname
+        TS_HOSTNAME=$(generate_hostname)
     fi
+
+    info "Device will be named: ${BOLD}${TS_HOSTNAME}${NC}"
 }
 
 # Authenticate Tailscale
