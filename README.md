@@ -36,6 +36,15 @@ Right-click file → Share → Taildrop → select your server
 
 Files are saved to `~/incoming` by default.
 
+### Claude Code Skill
+
+On Sprite environments with Claude Code, the installer adds a `/spritedrop` skill:
+
+```
+/spritedrop              # Check incoming files and status
+/spritedrop send <file> <device>   # Send a file
+```
+
 ### Configuration
 
 Set environment variables before the install command:
