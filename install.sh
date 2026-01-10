@@ -269,6 +269,67 @@ EOF
     fi
 }
 
+# Install Claude Code skill
+install_skill() {
+    # Only install if Claude Code skills directory exists
+    local skill_dir="$HOME/.claude/skills/spritedrop"
+    [ -d "$HOME/.claude/skills" ] || return 0
+
+    mkdir -p "$skill_dir"
+    cat > "$skill_dir/SKILL.md" << 'SKILL_EOF'
+---
+name: spritedrop
+description: Use this skill when users want to receive files via Taildrop, check incoming files, view received files, or send files to other devices on their tailnet.
+---
+
+You help manage Taildrop file transfers via spritedrop.
+
+## Incoming Files
+
+Files received via Taildrop are saved to: `~/incoming/`
+
+To check for new files:
+```bash
+ls -la ~/incoming/
+```
+
+To read/view a received file, use the Read tool with the full path.
+
+## Send Files
+
+To send a file to another device on the tailnet:
+```bash
+tailscale file cp <local-file> <device-name>:
+```
+
+List available devices:
+```bash
+tailscale status
+```
+
+## Status
+
+Check if spritedrop is running:
+```bash
+sprite-env services get spritedrop
+```
+
+Check Tailscale connection:
+```bash
+tailscale status
+```
+
+## Quick Actions
+
+When user asks to:
+- "check incoming" / "what files" → List ~/incoming/
+- "read <file>" / "show <file>" → Use Read tool on ~/incoming/<file>
+- "send <file> to <device>" → Run `tailscale file cp`
+- "status" → Show spritedrop service and tailscale status
+SKILL_EOF
+    info "Claude Code skill installed"
+}
+
 # Main
 main() {
     echo ""
@@ -293,6 +354,7 @@ main() {
     install_spritedrop
     create_recv_dir
     setup_service
+    install_skill
 
     # Get final hostname for display
     local device_name=$(tailscale status --json 2>/dev/null | jq -r '.Self.HostName // empty' 2>/dev/null)
