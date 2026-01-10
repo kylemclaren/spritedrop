@@ -147,14 +147,17 @@ prompt_hostname() {
     # Skip if already authenticated
     tailscale status > /dev/null 2>&1 && return 0
 
-    echo ""
-    echo -e "  ${DIM}Enter a hostname for this device in your tailnet${NC}"
-    echo -e "  ${DIM}(e.g., sprite-myproject, sprite-api)${NC}"
-    echo ""
-    read -p "  Hostname [Enter to auto-generate]: " input_hostname
+    # Only prompt if running interactively (not piped)
+    if [ -t 0 ]; then
+        echo ""
+        echo -e "  ${DIM}Enter a hostname for this device in your tailnet${NC}"
+        echo -e "  ${DIM}(e.g., sprite-myproject, sprite-api)${NC}"
+        echo ""
+        read -p "  Hostname [Enter to auto-generate]: " input_hostname
 
-    if [ -n "$input_hostname" ]; then
-        TS_HOSTNAME="$input_hostname"
+        if [ -n "$input_hostname" ]; then
+            TS_HOSTNAME="$input_hostname"
+        fi
     fi
 }
 
