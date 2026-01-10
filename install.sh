@@ -7,6 +7,7 @@ set -e
 REPO="kylemclaren/spritedrop"
 INSTALL_DIR="/usr/local/bin"
 RECV_DIR="${SPRITEDROP_DIR:-$HOME/incoming}"
+TS_HOSTNAME="${SPRITEDROP_HOSTNAME:-}"
 
 # Colors
 RED='\033[0;31m'
@@ -110,6 +111,11 @@ start_tailscaled() {
 auth_tailscale() {
     if tailscale status &> /dev/null 2>&1; then
         info "Tailscale already authenticated"
+        # Update hostname if specified
+        if [ -n "$TS_HOSTNAME" ]; then
+            info "Setting hostname to: $TS_HOSTNAME"
+            sudo tailscale set --hostname="$TS_HOSTNAME"
+        fi
         return 0
     fi
 
@@ -117,7 +123,12 @@ auth_tailscale() {
     echo ""
     warn "Please authenticate in your browser when prompted"
     echo ""
-    sudo tailscale up
+    if [ -n "$TS_HOSTNAME" ]; then
+        info "Setting hostname to: $TS_HOSTNAME"
+        sudo tailscale up --hostname="$TS_HOSTNAME"
+    else
+        sudo tailscale up
+    fi
     info "Tailscale authenticated successfully"
 }
 

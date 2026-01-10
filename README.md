@@ -33,10 +33,21 @@ tailscale file cp myfile.txt <hostname>:
 Right-click file → Share → Taildrop → select your server
 ```
 
-Files are saved to `~/incoming` by default. Override with:
+Files are saved to `~/incoming` by default.
+
+### Configuration
+
+Set environment variables before the install command:
 
 ```bash
-SPRITEDROP_DIR=/path/to/dir curl -fsSL ... | bash
+# Custom file directory
+SPRITEDROP_DIR=/path/to/dir
+
+# Custom Tailscale hostname (useful for multiple Sprites)
+SPRITEDROP_HOSTNAME=sprite-myproject
+
+# Example with both
+SPRITEDROP_HOSTNAME=sprite-api SPRITEDROP_DIR=/data/incoming curl -fsSL ... | bash
 ```
 
 ## Manual Installation
