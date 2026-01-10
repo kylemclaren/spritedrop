@@ -63,16 +63,32 @@ start_tailscaled() {
     fi
 
     if is_sprite; then
-        info "Sprite environment detected, creating tailscaled service..."
+        info "Sprite environment detected..."
         if ! sprite-env services get tailscaled &> /dev/null; then
+            info "Creating tailscaled service..."
             sprite-env services create tailscaled \
                 --cmd /usr/sbin/tailscaled \
                 --args "--state=/var/lib/tailscale/tailscaled.state,--socket=/var/run/tailscale/tailscaled.sock" \
                 --no-stream
             info "tailscaled service created"
         else
-            info "tailscaled service already exists"
+            info "tailscaled service exists, ensuring it's running..."
+            # Delete and recreate to ensure it starts
+            sprite-env services delete tailscaled 2>/dev/null || true
+            sleep 1
+            sprite-env services create tailscaled \
+                --cmd /usr/sbin/tailscaled \
+                --args "--state=/var/lib/tailscale/tailscaled.state,--socket=/var/run/tailscale/tailscaled.sock" \
+                --no-stream
         fi
+        # Wait for tailscaled to be ready
+        info "Waiting for tailscaled to start..."
+        for i in {1..10}; do
+            if pgrep -x tailscaled > /dev/null; then
+                break
+            fi
+            sleep 1
+        done
     elif command -v systemctl &> /dev/null; then
         info "Starting tailscaled via systemd..."
         sudo systemctl enable --now tailscaled
