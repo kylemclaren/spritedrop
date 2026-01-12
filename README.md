@@ -10,6 +10,14 @@ A persistent [Taildrop](https://tailscale.com/kb/1106/taildrop) file receiver fo
 - Installs Tailscale if not already present
 - Send files between Sprites or any device on your tailnet
 
+## Recommended Setup
+
+For multiple Sprites, create a dedicated tailnet using a new GitHub organization. This keeps your Sprites isolated and organized:
+
+1. Create a new GitHub org (e.g., `myproject-sprites`)
+2. Sign up for [Tailscale](https://tailscale.com) using that org
+3. Install spritedrop on each Sprite - they'll automatically join the same tailnet
+
 ## Quick Install
 
 ```bash
