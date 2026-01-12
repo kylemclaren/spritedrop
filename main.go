@@ -11,9 +11,19 @@ import (
 	"syscall"
 )
 
+var version = "dev"
+
 func main() {
 	dir := flag.String("dir", ".", "directory to save received files")
+	conflict := flag.String("conflict", "rename", "conflict resolution: skip, overwrite, rename")
+	verbose := flag.Bool("verbose", false, "verbose output")
+	showVersion := flag.Bool("version", false, "show version")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("spritedrop %s\n", version)
+		os.Exit(0)
+	}
 
 	// Resolve to absolute path
 	absDir, err := filepath.Abs(*dir)
@@ -26,8 +36,8 @@ func main() {
 		log.Fatalf("failed to create directory: %v", err)
 	}
 
-	fmt.Printf("Listening for Taildrop files in %s\n", absDir)
-	fmt.Println("Press Ctrl+C to stop")
+	fmt.Printf("spritedrop %s\n", version)
+	fmt.Printf("Receiving files to: %s\n", absDir)
 
 	// Handle graceful shutdown
 	sigCh := make(chan os.Signal, 1)
@@ -39,29 +49,19 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// Continuously listen for files
-	for {
-		cmd := exec.Command("tailscale", "file", "get", "--wait", absDir)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+	// Build command args
+	args := []string{"file", "get", "--loop", "--conflict=" + *conflict}
+	if *verbose {
+		args = append(args, "--verbose")
+	}
+	args = append(args, absDir)
 
-		if err := cmd.Run(); err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-				// Likely no files, just continue
-				continue
-			}
-			log.Printf("error: %v", err)
-		}
+	// Run tailscale file get --loop
+	cmd := exec.Command("tailscale", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-		// List what we received
-		entries, _ := os.ReadDir(absDir)
-		fmt.Printf("Files in %s:\n", absDir)
-		for _, e := range entries {
-			if !e.IsDir() {
-				info, _ := e.Info()
-				fmt.Printf("  %s (%d bytes)\n", e.Name(), info.Size())
-			}
-		}
-		fmt.Println("Waiting for more files...")
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("tailscale file get failed: %v", err)
 	}
 }
