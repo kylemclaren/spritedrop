@@ -8,6 +8,7 @@ A persistent [Taildrop](https://tailscale.com/kb/1106/taildrop) file receiver fo
 - Automatically restarts after receiving files
 - Works with systemd or Sprite service managers
 - Installs Tailscale if not already present
+- Send files between Sprites or any device on your tailnet
 
 ## Quick Install
 
