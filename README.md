@@ -1,3 +1,5 @@
+![Screen Recording 2026-01-12 at 12 14 51](https://github.com/user-attachments/assets/3436304a-a544-4be9-8435-0df231ede18d)
+
 # spritedrop
 
 A persistent [Taildrop](https://tailscale.com/kb/1106/taildrop) file receiver for [Sprites](https://sprites.dev) environments.
