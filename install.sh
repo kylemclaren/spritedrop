@@ -309,12 +309,17 @@ tailscale status
 
 ## Status
 
+Check this device's name/IP:
+```bash
+tailscale status --self
+```
+
 Check if spritedrop is running:
 ```bash
 sprite-env services get spritedrop
 ```
 
-Check Tailscale connection:
+List all devices on tailnet:
 ```bash
 tailscale status
 ```
